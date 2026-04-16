@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Explorador espacial NASA
 
-## Getting Started
+Aplicación web fullstack con [Next.js](https://nextjs.org) que muestra imágenes y vídeos del espacio usando las APIs públicas de la NASA. **No hay registro ni inicio de sesión** para usar la app.
 
-First, run the development server:
+## APIs utilizadas
+
+- **[NASA Image and Video Library](https://images-api.nasa.gov/)** — búsqueda y manifiestos de medios. No requiere clave de API.
+- **[APOD](https://api.nasa.gov/)** (Astronomy Picture of the Day) — imagen o vídeo del día. El servidor usa `DEMO_KEY` por defecto (límites bajos) o una clave opcional.
+
+## Variables de entorno
+
+Crea un archivo `.env.local` en la raíz del proyecto (no lo subas a git):
+
+| Variable | Obligatoria | Descripción |
+|----------|-------------|-------------|
+| `NASA_API_KEY` | No | Clave gratuita de [api.nasa.gov](https://api.nasa.gov/). Aumenta el límite de peticiones a APOD (hasta unas 1.000/hora con clave propia frente a la `DEMO_KEY`). |
+
+Sin `NASA_API_KEY`, APOD usa `DEMO_KEY` (aprox. 30 peticiones por IP y hora y 50 al día, según la documentación de la NASA).
+
+**Nota:** Pedir la clave en api.nasa.gov es un registro ante la NASA, no en esta aplicación. La biblioteca de imágenes (`images-api.nasa.gov`) sigue sin requerir clave.
+
+## Desarrollo
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abre [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `npm run dev` — servidor de desarrollo
+- `npm run build` — compilación de producción
+- `npm run start` — sirve la build
+- `npm run lint` — ESLint
 
-## Learn More
+## Estructura relevante
 
-To learn more about Next.js, take a look at the following resources:
+- `app/api/search` — proxy de búsqueda a la biblioteca de imágenes.
+- `app/api/asset/[nasaId]` — manifiesto de un recurso (URLs de vídeo/imagen).
+- `app/api/apod` — proxy de APOD con clave en servidor.
+- `lib/nasa-images.ts` — normalización de respuestas de la biblioteca de imágenes.
+- `app/media/[nasaId]` — página de detalle con reproductor o imagen.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Licencia
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT (o la que elijas). Los contenidos multimedia pertenecen a la NASA y a sus respectivos titulares; revisa las políticas de uso en los sitios oficiales.
