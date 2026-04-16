@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "sonarqube": {
+      "type": "http",
+      "url": "https://api.sonarcloud.io/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_SONARQUBE_TOKEN",
+        "SONARQUBE_ORG": "YOUR_SONARQUBE_ORG" //Required for SonarCloud, optional for SonarQube.
+        //"SONARQUBE_READ_ONLY": "false" //Default value is true.
+        //"SONARQUBE_TOOLSETS": "<YourOptionalToolset>" //Using this optional header refines the default toolsets.
+      }
+    }
+  }
+}
