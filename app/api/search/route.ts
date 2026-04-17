@@ -25,6 +25,14 @@ function parseYearParam(value: string | null): number | null {
 
 type YearFilter = { yearStart: number | null; yearEnd: number | null };
 
+type YearValidation =
+  | { ok: true; years: YearFilter }
+  | { ok: false; message: string };
+
+type AttemptResolution =
+  | { ok: true; body: ReturnType<typeof normalizeSearchResponse>; attempt: string }
+  | { ok: false; status: number; message: string };
+
 async function fetchNasaSearchJson(
   q: string,
   page: number,
@@ -66,6 +74,79 @@ async function fetchNasaSearchJson(
   }
 }
 
+function validateYearFilter(rawYearStart: string | null, rawYearEnd: string | null): YearValidation {
+  const yearStart = parseYearParam(rawYearStart);
+  const yearEnd = parseYearParam(rawYearEnd);
+
+  if (rawYearStart && rawYearStart.trim() !== "" && yearStart === null) {
+    return {
+      ok: false,
+      message: `Año inválido. Usa cuatro dígitos (${NASA_YEAR_MIN}–${NASA_YEAR_MAX}).`,
+    };
+  }
+
+  if (rawYearEnd && rawYearEnd.trim() !== "" && yearEnd === null) {
+    return {
+      ok: false,
+      message: `Año inválido. Usa cuatro dígitos (${NASA_YEAR_MIN}–${NASA_YEAR_MAX}).`,
+    };
+  }
+
+  if (yearStart !== null && yearEnd !== null && yearStart > yearEnd) {
+    return {
+      ok: false,
+      message: "year_start no puede ser mayor que year_end.",
+    };
+  }
+
+  return { ok: true, years: { yearStart, yearEnd } };
+}
+
+function mapProxyStatus(status: number): number {
+  return status >= 500 ? 502 : status;
+}
+
+async function resolveAttempts(
+  attempts: string[],
+  page: number,
+  pageSize: number,
+  mediaType: string,
+  years: YearFilter,
+): Promise<AttemptResolution> {
+  let lastHttpError: { status: number; message: string } | null = null;
+  let lastSuccess: { body: ReturnType<typeof normalizeSearchResponse>; attempt: string } | null = null;
+
+  for (const attempt of attempts) {
+    const { ok, status, raw } = await fetchNasaSearchJson(attempt, page, pageSize, mediaType, years);
+    if (!ok || !raw) {
+      lastHttpError = { status: mapProxyStatus(status), message: errorMessage(status) };
+      continue;
+    }
+
+    const body = normalizeSearchResponse(raw, page, pageSize);
+    lastSuccess = { body, attempt };
+
+    if (page === 1 && body.totalHits === 0 && attempt !== attempts.at(-1)) {
+      continue;
+    }
+    break;
+  }
+
+  if (!lastSuccess) {
+    return {
+      ok: false,
+      status: lastHttpError?.status ?? 502,
+      message: lastHttpError?.message ?? "No hay conexión con la API de imágenes de la NASA.",
+    };
+  }
+
+  return {
+    ok: true,
+    body: lastSuccess.body,
+    attempt: lastSuccess.attempt,
+  };
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("q") ?? "").trim();
@@ -88,67 +169,31 @@ export async function GET(request: Request) {
 
   const rawYearStart = searchParams.get("year_start");
   const rawYearEnd = searchParams.get("year_end");
-  if (
-    (rawYearStart && rawYearStart.trim() !== "" && parseYearInput(rawYearStart) === null) ||
-    (rawYearEnd && rawYearEnd.trim() !== "" && parseYearInput(rawYearEnd) === null)
-  ) {
+  const yearValidation = validateYearFilter(rawYearStart, rawYearEnd);
+  if (!yearValidation.ok) {
     return NextResponse.json(
-      { error: `Año inválido. Usa cuatro dígitos (${NASA_YEAR_MIN}–${NASA_YEAR_MAX}).` },
+      { error: yearValidation.message },
       { status: 400 },
     );
   }
 
-  const yearStart = parseYearParam(rawYearStart);
-  const yearEnd = parseYearParam(rawYearEnd);
-  if (
-    yearStart !== null &&
-    yearEnd !== null &&
-    yearStart > yearEnd
-  ) {
-    return NextResponse.json(
-      { error: "year_start no puede ser mayor que year_end." },
-      { status: 400 },
-    );
-  }
-  const years: YearFilter = { yearStart, yearEnd };
+  const years = yearValidation.years;
 
   const attempts = page === 1 ? buildNasaImageSearchAttempts(q) : [q];
-
-  let lastHttpError: { status: number; message: string } | null = null;
-  let lastSuccess: { body: ReturnType<typeof normalizeSearchResponse>; attempt: string } | null = null;
-
-  for (const attempt of attempts) {
-    const { ok, status, raw } = await fetchNasaSearchJson(attempt, page, pageSize, mediaType, years);
-    if (!ok || !raw) {
-      lastHttpError = { status: status >= 500 ? 502 : status, message: errorMessage(status) };
-      continue;
-    }
-
-    const body = normalizeSearchResponse(raw, page, pageSize);
-    lastSuccess = { body, attempt };
-
-    if (page === 1 && body.totalHits === 0 && attempt !== attempts[attempts.length - 1]) {
-      continue;
-    }
-    break;
+  const resolution = await resolveAttempts(attempts, page, pageSize, mediaType, years);
+  if (!resolution.ok) {
+    return NextResponse.json({ error: resolution.message }, { status: resolution.status });
   }
 
-  if (!lastSuccess) {
-    return NextResponse.json(
-      { error: lastHttpError?.message ?? "No hay conexión con la API de imágenes de la NASA." },
-      { status: lastHttpError?.status ?? 502 },
-    );
-  }
-
-  const { body, attempt } = lastSuccess;
+  const { body, attempt } = resolution;
   const effectiveQuery = attempt;
 
   return NextResponse.json(
     {
       ...body,
       effectiveQuery,
-      yearStart: yearStart ?? undefined,
-      yearEnd: yearEnd ?? undefined,
+      yearStart: years.yearStart ?? undefined,
+      yearEnd: years.yearEnd ?? undefined,
     },
     {
       headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" },

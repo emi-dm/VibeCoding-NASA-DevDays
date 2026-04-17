@@ -167,6 +167,235 @@ function NasaResultsBlock({ nasa }: { nasa: SearchNormalized }) {
   );
 }
 
+function NasaStatusBlock({
+  loading,
+  err,
+  nasa,
+}: {
+  loading: boolean;
+  err: string | null;
+  nasa: SearchNormalized | null;
+}) {
+  if (loading) {
+    return <p className="text-sm text-zinc-500">Consultando la biblioteca de imágenes de la NASA…</p>;
+  }
+  if (err) {
+    return <p className="text-sm text-red-700 dark:text-red-300">{err}</p>;
+  }
+  if (nasa) {
+    return <NasaResultsBlock nasa={nasa} />;
+  }
+  return null;
+}
+
+function EffectiveQueryInfo({ sentQuery, nasa }: { sentQuery: string; nasa: SearchNormalized | null }) {
+  if (!nasa?.effectiveQuery || nasa.effectiveQuery === sentQuery) {
+    return null;
+  }
+
+  return (
+    <>
+      <br />
+      Índice NASA (efectivo):{" "}
+      <span className="break-all text-zinc-700 dark:text-zinc-300">{nasa.effectiveQuery}</span>
+    </>
+  );
+}
+
+function GalacticCenterSelection({
+  nasa,
+  loading,
+  err,
+}: {
+  nasa: SearchNormalized | null;
+  loading: boolean;
+  err: string | null;
+}) {
+  return (
+    <>
+      <div className="space-y-1 border-b border-zinc-100 pb-4 dark:border-zinc-800">
+        <p className="text-2xl font-bold tracking-tight text-orange-600 dark:text-orange-400">Centro galáctico</p>
+        <p className="text-sm text-zinc-700 dark:text-zinc-300">
+          Dirección hacia el centro de la Vía Láctea (longitud galáctica l ≈ 0°, latitud b = 0°), en la constelación
+          de Sagitario (región de Sgr A*).
+        </p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          No es un objeto Messier: es un punto de referencia en el mapa.
+        </p>
+        <dl className="mt-3 space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+          <div className="flex justify-between gap-2">
+            <dt>l, b</dt>
+            <dd>0°, 0°</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt>AR</dt>
+            <dd>{formatRaSexagesimal(GC_COORDS.raDeg)}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt>AR (°)</dt>
+            <dd>{GC_COORDS.raDeg.toFixed(4)}°</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt>Dec</dt>
+            <dd>{formatDecSexagesimal(GC_COORDS.decDeg)}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt>Dec (°)</dt>
+            <dd>{GC_COORDS.decDeg.toFixed(4)}°</dd>
+          </div>
+        </dl>
+        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
+          Consulta enviada: <span className="break-all text-zinc-700 dark:text-zinc-300">{GALACTIC_CENTER_NASA_QUERY}</span>
+          <EffectiveQueryInfo sentQuery={GALACTIC_CENTER_NASA_QUERY} nasa={nasa} />
+        </p>
+      </div>
+
+      <NasaStatusBlock loading={loading} err={err} nasa={nasa} />
+    </>
+  );
+}
+
+function MessierSelection({
+  selected,
+  nasa,
+  loading,
+  err,
+}: {
+  selected: Extract<MapSelection, { kind: "messier" }>;
+  nasa: SearchNormalized | null;
+  loading: boolean;
+  err: string | null;
+}) {
+  const query = messierPrimaryNasaQuery(selected.galaxy.messier);
+
+  return (
+    <>
+      <div className="space-y-1 border-b border-zinc-100 pb-4 dark:border-zinc-800">
+        <p className="text-2xl font-bold tracking-tight text-indigo-600 dark:text-indigo-400">{selected.galaxy.messier}</p>
+        {selected.galaxy.name ? <p className="text-base text-zinc-800 dark:text-zinc-200">{selected.galaxy.name}</p> : null}
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">{morphologyLabel(selected.galaxy.morphology)}</p>
+        <dl className="mt-3 space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
+          <div className="flex justify-between gap-2">
+            <dt>AR</dt>
+            <dd>{formatRaSexagesimal(selected.galaxy.raDeg)}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt>AR (°)</dt>
+            <dd>{selected.galaxy.raDeg.toFixed(4)}°</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt>Dec</dt>
+            <dd>{formatDecSexagesimal(selected.galaxy.decDeg)}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt>Dec (°)</dt>
+            <dd>{selected.galaxy.decDeg.toFixed(4)}°</dd>
+          </div>
+        </dl>
+        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
+          Consulta enviada: <span className="break-all text-zinc-700 dark:text-zinc-300">{query}</span>
+          <EffectiveQueryInfo sentQuery={query} nasa={nasa} />
+        </p>
+      </div>
+
+      <NasaStatusBlock loading={loading} err={err} nasa={nasa} />
+    </>
+  );
+}
+
+function validateYearDrafts(draftYearStart: string, draftYearEnd: string): {
+  ok: true;
+  yearStart: number | null;
+  yearEnd: number | null;
+} | {
+  ok: false;
+  message: string;
+} {
+  const ys = draftYearStart.trim() ? parseYearInput(draftYearStart) : null;
+  if (draftYearStart.trim() && ys === null) {
+    return { ok: false, message: `Año inicial inválido (${NASA_YEAR_MIN}–${NASA_YEAR_MAX}, formato YYYY).` };
+  }
+
+  const ye = draftYearEnd.trim() ? parseYearInput(draftYearEnd) : null;
+  if (draftYearEnd.trim() && ye === null) {
+    return { ok: false, message: `Año final inválido (${NASA_YEAR_MIN}–${NASA_YEAR_MAX}, formato YYYY).` };
+  }
+
+  const orderMsg = validateYearOrderMessage(ys, ye);
+  if (orderMsg) {
+    return { ok: false, message: orderMsg };
+  }
+
+  return { ok: true, yearStart: ys, yearEnd: ye };
+}
+
+function queryForSelection(selected: MapSelection): string {
+  return selected.kind === "messier"
+    ? messierPrimaryNasaQuery(selected.galaxy.messier)
+    : GALACTIC_CENTER_NASA_QUERY;
+}
+
+function SelectionPanel({
+  selected,
+  nasa,
+  loading,
+  err,
+  draftYearStart,
+  draftYearEnd,
+  setDraftYearStart,
+  setDraftYearEnd,
+  yearFieldError,
+  applyYearFilter,
+  clearYearFilter,
+  appliedYearStart,
+  appliedYearEnd,
+}: {
+  selected: MapSelection | null;
+  nasa: SearchNormalized | null;
+  loading: boolean;
+  err: string | null;
+  draftYearStart: string;
+  draftYearEnd: string;
+  setDraftYearStart: (value: string) => void;
+  setDraftYearEnd: (value: string) => void;
+  yearFieldError: string | null;
+  applyYearFilter: () => void;
+  clearYearFilter: () => void;
+  appliedYearStart: number | null;
+  appliedYearEnd: number | null;
+}) {
+  if (!selected) {
+    return (
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        Haz clic en una galaxia Messier (esferas de color) o en el{" "}
+        <strong className="text-orange-700 dark:text-orange-300">centro galáctico</strong> (esfera naranja) para ver
+        coordenadas y resultados en vivo de la NASA.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <SidebarNasaYearControls
+        draftStart={draftYearStart}
+        draftEnd={draftYearEnd}
+        setDraftStart={setDraftYearStart}
+        setDraftEnd={setDraftYearEnd}
+        fieldError={yearFieldError}
+        onApply={applyYearFilter}
+        onClear={clearYearFilter}
+        appliedStart={appliedYearStart}
+        appliedEnd={appliedYearEnd}
+      />
+      {selected.kind === "galactic-center" ? (
+        <GalacticCenterSelection nasa={nasa} loading={loading} err={err} />
+      ) : (
+        <MessierSelection selected={selected} nasa={nasa} loading={loading} err={err} />
+      )}
+    </>
+  );
+}
+
 export function GalaxyHybridMap() {
   const [selected, setSelected] = useState<MapSelection | null>(null);
   const [nasa, setNasa] = useState<SearchNormalized | null>(null);
@@ -223,32 +452,19 @@ export function GalaxyHybridMap() {
   useEffect(() => {
     if (!selected) return;
     const ac = new AbortController();
-    const q =
-      selected.kind === "messier"
-        ? messierPrimaryNasaQuery(selected.galaxy.messier)
-        : GALACTIC_CENTER_NASA_QUERY;
+    const q = queryForSelection(selected);
     void loadNasaForQuery(q, ac.signal);
     return () => ac.abort();
   }, [selected, loadNasaForQuery]);
 
   const applyYearFilter = () => {
-    const ys = draftYearStart.trim() ? parseYearInput(draftYearStart) : null;
-    const ye = draftYearEnd.trim() ? parseYearInput(draftYearEnd) : null;
-    if (draftYearStart.trim() && ys === null) {
-      setYearFieldError(`Año inicial inválido (${NASA_YEAR_MIN}–${NASA_YEAR_MAX}, formato YYYY).`);
+    const validated = validateYearDrafts(draftYearStart, draftYearEnd);
+    if (!validated.ok) {
+      setYearFieldError(validated.message);
       return;
     }
-    if (draftYearEnd.trim() && ye === null) {
-      setYearFieldError(`Año final inválido (${NASA_YEAR_MIN}–${NASA_YEAR_MAX}, formato YYYY).`);
-      return;
-    }
-    const orderMsg = validateYearOrderMessage(ys, ye);
-    if (orderMsg) {
-      setYearFieldError(orderMsg);
-      return;
-    }
-    setAppliedYearStart(ys);
-    setAppliedYearEnd(ye);
+    setAppliedYearStart(validated.yearStart);
+    setAppliedYearEnd(validated.yearEnd);
     setYearFieldError(null);
   };
 
@@ -291,136 +507,21 @@ export function GalaxyHybridMap() {
 
       <aside className="w-full shrink-0 space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:w-[380px]">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Datos híbridos</h2>
-        {!selected ? (
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Haz clic en una galaxia Messier (esferas de color) o en el{" "}
-            <strong className="text-orange-700 dark:text-orange-300">centro galáctico</strong> (esfera naranja) para ver
-            coordenadas y resultados en vivo de la NASA.
-          </p>
-        ) : (
-          <>
-            <SidebarNasaYearControls
-              draftStart={draftYearStart}
-              draftEnd={draftYearEnd}
-              setDraftStart={setDraftYearStart}
-              setDraftEnd={setDraftYearEnd}
-              fieldError={yearFieldError}
-              onApply={applyYearFilter}
-              onClear={clearYearFilter}
-              appliedStart={appliedYearStart}
-              appliedEnd={appliedYearEnd}
-            />
-            {selected.kind === "galactic-center" ? (
-              <>
-                <div className="space-y-1 border-b border-zinc-100 pb-4 dark:border-zinc-800">
-                  <p className="text-2xl font-bold tracking-tight text-orange-600 dark:text-orange-400">
-                    Centro galáctico
-                  </p>
-                  <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                    Dirección hacia el centro de la Vía Láctea (longitud galáctica l ≈ 0°, latitud b = 0°), en la
-                    constelación de Sagitario (región de Sgr A*).
-                  </p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    No es un objeto Messier: es un punto de referencia en el mapa.
-                  </p>
-                  <dl className="mt-3 space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
-                    <div className="flex justify-between gap-2">
-                      <dt>l, b</dt>
-                      <dd>0°, 0°</dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt>AR</dt>
-                      <dd>{formatRaSexagesimal(GC_COORDS.raDeg)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt>AR (°)</dt>
-                      <dd>{GC_COORDS.raDeg.toFixed(4)}°</dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt>Dec</dt>
-                      <dd>{formatDecSexagesimal(GC_COORDS.decDeg)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt>Dec (°)</dt>
-                      <dd>{GC_COORDS.decDeg.toFixed(4)}°</dd>
-                    </div>
-                  </dl>
-                  <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
-                    Consulta enviada:{" "}
-                    <span className="break-all text-zinc-700 dark:text-zinc-300">{GALACTIC_CENTER_NASA_QUERY}</span>
-                    {nasa?.effectiveQuery && nasa.effectiveQuery !== GALACTIC_CENTER_NASA_QUERY ? (
-                      <>
-                        <br />
-                        Índice NASA (efectivo):{" "}
-                        <span className="break-all text-zinc-700 dark:text-zinc-300">{nasa.effectiveQuery}</span>
-                      </>
-                    ) : null}
-                  </p>
-                </div>
-
-                {loading ? (
-                  <p className="text-sm text-zinc-500">Consultando la biblioteca de imágenes de la NASA…</p>
-                ) : err ? (
-                  <p className="text-sm text-red-700 dark:text-red-300">{err}</p>
-                ) : nasa ? (
-                  <NasaResultsBlock nasa={nasa} />
-                ) : null}
-              </>
-            ) : (
-              <>
-                <div className="space-y-1 border-b border-zinc-100 pb-4 dark:border-zinc-800">
-                  <p className="text-2xl font-bold tracking-tight text-indigo-600 dark:text-indigo-400">
-                    {selected.galaxy.messier}
-                  </p>
-                  {selected.galaxy.name ? (
-                    <p className="text-base text-zinc-800 dark:text-zinc-200">{selected.galaxy.name}</p>
-                  ) : null}
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{morphologyLabel(selected.galaxy.morphology)}</p>
-                  <dl className="mt-3 space-y-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
-                    <div className="flex justify-between gap-2">
-                      <dt>AR</dt>
-                      <dd>{formatRaSexagesimal(selected.galaxy.raDeg)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt>AR (°)</dt>
-                      <dd>{selected.galaxy.raDeg.toFixed(4)}°</dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt>Dec</dt>
-                      <dd>{formatDecSexagesimal(selected.galaxy.decDeg)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt>Dec (°)</dt>
-                      <dd>{selected.galaxy.decDeg.toFixed(4)}°</dd>
-                    </div>
-                  </dl>
-                  <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
-                    Consulta enviada:{" "}
-                    <span className="break-all text-zinc-700 dark:text-zinc-300">
-                      {messierPrimaryNasaQuery(selected.galaxy.messier)}
-                    </span>
-                    {nasa?.effectiveQuery &&
-                    nasa.effectiveQuery !== messierPrimaryNasaQuery(selected.galaxy.messier) ? (
-                      <>
-                        <br />
-                        Índice NASA (efectivo):{" "}
-                        <span className="break-all text-zinc-700 dark:text-zinc-300">{nasa.effectiveQuery}</span>
-                      </>
-                    ) : null}
-                  </p>
-                </div>
-
-                {loading ? (
-                  <p className="text-sm text-zinc-500">Consultando la biblioteca de imágenes de la NASA…</p>
-                ) : err ? (
-                  <p className="text-sm text-red-700 dark:text-red-300">{err}</p>
-                ) : nasa ? (
-                  <NasaResultsBlock nasa={nasa} />
-                ) : null}
-              </>
-            )}
-          </>
-        )}
+        <SelectionPanel
+          selected={selected}
+          nasa={nasa}
+          loading={loading}
+          err={err}
+          draftYearStart={draftYearStart}
+          draftYearEnd={draftYearEnd}
+          setDraftYearStart={setDraftYearStart}
+          setDraftYearEnd={setDraftYearEnd}
+          yearFieldError={yearFieldError}
+          applyYearFilter={applyYearFilter}
+          clearYearFilter={clearYearFilter}
+          appliedYearStart={appliedYearStart}
+          appliedYearEnd={appliedYearEnd}
+        />
       </aside>
     </div>
   );

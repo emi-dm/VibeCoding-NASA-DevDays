@@ -13,6 +13,57 @@ import {
 
 type MediaFilter = "image,video" | "image" | "video";
 
+type ValidYears =
+  | { ok: true; yearStart: number | null; yearEnd: number | null }
+  | { ok: false; message: string };
+
+function validateYearInputs(yearStartInput: string, yearEndInput: string): ValidYears {
+  const yearStart = yearStartInput.trim() ? parseYearInput(yearStartInput) : null;
+  if (yearStartInput.trim() && yearStart === null) {
+    return {
+      ok: false,
+      message: `Año inicial inválido (${NASA_YEAR_MIN}–${NASA_YEAR_MAX}, formato YYYY).`,
+    };
+  }
+
+  const yearEnd = yearEndInput.trim() ? parseYearInput(yearEndInput) : null;
+  if (yearEndInput.trim() && yearEnd === null) {
+    return {
+      ok: false,
+      message: `Año final inválido (${NASA_YEAR_MIN}–${NASA_YEAR_MAX}, formato YYYY).`,
+    };
+  }
+
+  const orderError = validateYearOrderMessage(yearStart, yearEnd);
+  if (orderError) {
+    return { ok: false, message: orderError };
+  }
+
+  return { ok: true, yearStart, yearEnd };
+}
+
+function buildSearchParams(
+  q: string,
+  page: number,
+  mediaType: MediaFilter,
+  yearStart: number | null,
+  yearEnd: number | null,
+): URLSearchParams {
+  const params = new URLSearchParams({
+    q,
+    page: String(page),
+    page_size: "12",
+    media_type: mediaType,
+  });
+  if (yearStart !== null) {
+    params.set("year_start", String(yearStart));
+  }
+  if (yearEnd !== null) {
+    params.set("year_end", String(yearEnd));
+  }
+  return params;
+}
+
 function MediaBadge({ type }: { type: SearchItemNormalized["mediaType"] }) {
   const label = type === "video" ? "Vídeo" : type === "audio" ? "Audio" : "Imagen";
   return (
@@ -53,24 +104,13 @@ export function SearchExplorer() {
         let ys: number | null;
         let ye: number | null;
         if (nextPage === 1) {
-          ys = yearStartInput.trim() ? parseYearInput(yearStartInput) : null;
-          if (yearStartInput.trim() && ys === null) {
-            setError(`Año inicial inválido (${NASA_YEAR_MIN}–${NASA_YEAR_MAX}, formato YYYY).`);
-            setLoading(false);
+          const validYears = validateYearInputs(yearStartInput, yearEndInput);
+          if (!validYears.ok) {
+            setError(validYears.message);
             return;
           }
-          ye = yearEndInput.trim() ? parseYearInput(yearEndInput) : null;
-          if (yearEndInput.trim() && ye === null) {
-            setError(`Año final inválido (${NASA_YEAR_MIN}–${NASA_YEAR_MAX}, formato YYYY).`);
-            setLoading(false);
-            return;
-          }
-          const ord = validateYearOrderMessage(ys, ye);
-          if (ord) {
-            setError(ord);
-            setLoading(false);
-            return;
-          }
+          ys = validYears.yearStart;
+          ye = validYears.yearEnd;
           yearStartRef.current = ys;
           yearEndRef.current = ye;
         } else {
@@ -78,18 +118,7 @@ export function SearchExplorer() {
           ye = yearEndRef.current;
         }
 
-        const params = new URLSearchParams({
-          q: qForApi,
-          page: String(nextPage),
-          page_size: "12",
-          media_type: nextMedia,
-        });
-        if (ys !== null) {
-          params.set("year_start", String(ys));
-        }
-        if (ye !== null) {
-          params.set("year_end", String(ye));
-        }
+        const params = buildSearchParams(qForApi, nextPage, nextMedia, ys, ye);
         const res = await fetch(`/api/search?${params.toString()}`);
         const json = (await res.json()) as SearchNormalized & { error?: string };
         if (!res.ok) {
